@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>Add a geocoder</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.51.0/mapbox-gl.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.51.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body { margin:0; padding:0; }
+        #map { position:absolute; top:0; bottom:0; width:100%; }
+    </style>
+</head>
+<body>
+
+<script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v2.3.0/mapbox-gl-geocoder.min.js'></script>
+<link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v2.3.0/mapbox-gl-geocoder.css' type='text/css' />
+<div id='map'></div>
+
+<script>
+
+var token = mapboxgl.accessToken = 'pk.eyJ1IjoibWN3aGl0dGVtb3JlIiwiYSI6ImNqb2xrNjFnMzBhazAzcWtrZTN6b3pudDkifQ.JEOWHP7aOr20tr896Y2IZg';
+var map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v9',
+    center: [-79.4512, 43.6568],
+    zoom: 13
+});
+
+var setup = false;
+var fc = {
+  type: 'FeatureCollection',
+  features: []
+}
+
+map.on('load', function() {
+  setup = true;
+  map.addSource('geojson', {
+    type: 'geojson',
+    data: fc
+  });
+
+  map.addLayer({
+    id: 'house',
+    source: 'geojson',
+    type: 'circle',
+    filter: ['==', 'type', 'house'],
+    paint: {
+      'circle-radius': 6,
+      'circle-color': '#fbb03b'
+    }
+  });
+
+  map.addLayer({
+    id: 'iso-lines',
+    source: 'geojson',
+    type: 'line',
+    filter: ['==', '$type', 'Polygon'],
+    layout: {
+      'line-cap': 'round',
+      'line-join': 'round'
+    },
+    paint: {
+      'line-color': '#3bb2d0',
+      'line-width': 2
+    }
+  });
+
+  map.addLayer({
+    id: 'iso-fill',
+    source: 'geojson',
+    type: 'fill',
+    filter: ['==', '$type', 'Polygon'],
+    paint: {
+      'fill-color': '#fbb03b',
+      'fill-outline-color': '#fbb03b',
+      'fill-opacity': 0.1
+    }
+  });
+});
+
+function update() {
+  if (setup === false) return;
+  map.getSource('geojson').setData(fc);
+}
+
+var search = new MapboxGeocoder({
+    accessToken: mapboxgl.accessToken,
+    zoom: 13 
+});
+
+search.on('result', function(d) {
+  var house = d.result;
+  house.properties.type = 'house'
+  fc.features = [house];
+  var coords = house.geometry.coordinates.join(',');
+  var isoUrl = `https://api.mapbox.com/isochrone/v1/mapbox/driving/${coords}?contours_minutes=15,30,60&contours_colors=6706ce,04e813,4286f4&polygons=true&access_token=${token}`;
+  get(isoUrl, function(code, body) {
+    body.features.push(house);
+    fc = body;
+    console.log(fc.features.length);
+    update(); 
+  });
+});
+
+map.addControl(search);
+
+
+function get(url, cb) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4) cb(this.status, JSON.parse(xhttp.responseText));
+  }
+  xhttp.open('GET', url, true);
+  xhttp.send();
+}
+
+</script>
+
+</body>
+</html>
